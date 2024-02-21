@@ -48,7 +48,7 @@ class ViewController: UIViewController {
     private let labelResult: UILabel = {
         let label = UILabel()
         label.numberOfLines = 0
-        label.textColor = .white
+        label.textColor = .label
         label.font = UIFont.systemFont(ofSize: 18)
         label.textAlignment = .center
         label.text = ""
