@@ -11,15 +11,14 @@ import Vision
 
 class ViewController: UIViewController {
     
-    private var model: VNCoreMLModel? = nil
-    private var Model: VNCoreMLModel {
-        get {
-            guard let unwrappedModel = model else {
-                fatalError("model is nil!")
-            }
-            return unwrappedModel
+    //Declara o modelo com a configuração do modelo importado(CatDogModel)
+    private let Model: VNCoreMLModel = {
+        let configuration = MLModelConfiguration()
+        guard let importedModel = try? VNCoreMLModel(for: CatDogModel(configuration: configuration).model) else {
+            fatalError("Cannot import model!")
         }
-    }
+        return importedModel
+    }()
     
     private let imagePicker = UIImagePickerController()
     
@@ -62,15 +61,6 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // Load machine learning model
-        
-        let configuration = MLModelConfiguration()
-        guard let importedModel = try? VNCoreMLModel(for: CatDogModel(configuration: configuration).model) else {
-            fatalError("Cannot import model!")
-        }
-        
-        model = importedModel
         
         imagePicker.delegate = self
         imagePicker.allowsEditing = true
@@ -115,20 +105,22 @@ class ViewController: UIViewController {
         cameraBarButton.action = #selector(cameraButtonPressed)
     }
     
-    // On camera button pressed
+    //Função de quando apertar no ícone da câmera
     @objc private func cameraButtonPressed() {
         present(imagePicker, animated: true)
     }
     
+    //Função que recebe os resultados e muda para mostrar melhor ao usuário
+    //Mudei um pouco essa função só pq eu queria que mostrasse só o resultado do animal detectado
     private func setResultLabel(animal: String, accuracy: Float, resultString: String) {
-        print("Result string:\n\(resultString)")
+        print("Result string:\n\(resultString)") //Printa o resultado dos animais no console
         
-        var percent = accuracy * 100
+        var percent = accuracy * 100 //Transforma o accuracy em porcentagem
         
         if animal == "Dog" {
-            labelResult.text = "Cachorro\n\(round(10 * percent) / 10)%"
+            labelResult.text = "Cachorro\n\(round(10 * percent) / 10)%" //Usei o round para arrendondar uma casa decimal dps da virgula
         }else {
-            labelResult.text = "Gato\n\(round(10 * percent) / 10)%"
+            labelResult.text = "Gato\n\(round(10 * percent) / 10)%" //Usei o round para arrendondar uma casa decimal dps da virgula
         }
         
     }
@@ -137,7 +129,7 @@ class ViewController: UIViewController {
 
 extension ViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
-    // Load captured photo
+    //Método que é chamado após o usuário selecionar uma imagem (nosso caso, quando apertar em 'Use Photo')
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         
         let pickedImage = info[.editedImage]
@@ -146,56 +138,51 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
             fatalError("Failed to set picked image to preview!")
         }
         
-        imagePreview.image = pickedImage
-        labelPreview.isHidden = true
+        imagePreview.image = pickedImage //Coloca uma imagem no UIImageView do Menu
+        labelPreview.isHidden = true //Esconde a label do Menu
         
-        // Convert into CIImage before passing the captured photo into machine learning model
+        //Converte a imagem em CIImage, que é o tipo necessário para usar com a API de visão computacional (Vision).
         guard let convertedCIImage = CIImage(image: pickedImage) else {
             fatalError("Failed to convert UIImage into CIImage")
         }
         
-        // Pass captured photo into machine learning model
+        //Manda a imagem para o modelo da Machine Learning
         detectImage(image: convertedCIImage)
         
-        imagePicker.dismiss(animated: true)
+        imagePicker.dismiss(animated: true) //Fecha modal
     }
     
-    // Detect Cat or Dog with machine learning model
+    //Função que detecta cachorro ou gato no modelo da Machine Learning
     private func detectImage(image: CIImage) {
         
+        //É necessário fazer esse Request utilizando o modelo declarado lá no começo do código
         let request = VNCoreMLRequest(model: Model) { [weak self] (request, error) in
             
+            //Resultados da solicitação são extraídos e convertidos em uma matriz de VNClassificationObservation
             guard let classificationResults = request.results as? [VNClassificationObservation] else { return }
             
-            // Sort prediction results by its confidence
+            //Ordena os resultados do maior para menor
             let sortedResults = classificationResults.sorted { $0.confidence > $1.confidence}
             
-            var resultString = ""
+            var resultString = "" //String só para aparecer no console os dois resultados (do cachorro e do gato, e suas accuracy)
             
-            var animal: String = ""
-            var accuracy: Float = 0
+            var animal: String = sortedResults[0].identifier.capitalized //Nome do animal com a maior accuracy
+            var accuracy: Float = sortedResults[0].confidence //Valor do accuracy em uma escala de 0 a 1
             
-            // Sort the prediction results with highest confidence
+            //Apenas salvando os dois resultados na variável 'resultString'
             for i in 0...sortedResults.count-1 {
                 resultString += "\(sortedResults[i].identifier.capitalized), confidence: \(sortedResults[i].confidence)\n"
-                
-                if i == 0 {
-                    animal = sortedResults[i].identifier.capitalized
-                    accuracy = sortedResults[i].confidence
-                } else {
-                    if sortedResults[i].confidence > accuracy {
-                        animal = sortedResults[i].identifier.capitalized
-                        accuracy = sortedResults[i].confidence
-                    }
-                }
             }
             
+            //Chama a função lá da View Controller para organizar o resultado ao usuário
             self?.setResultLabel(animal: animal, accuracy: accuracy, resultString: resultString)
         }
         
+        //O VNImageRequestHandler é uma classe que fornece funcionalidades para executar solicitações de visão computacional em imagens
+        //Estamos passando a imgem selecionada pelo usuário que recebemos como parâmetro
         let handler = VNImageRequestHandler(ciImage: image)
         
-        // Perform prediction
+        //Processamos a imagem com o Request que criamos acima
         do {
             try handler.perform([request])
         } catch {
